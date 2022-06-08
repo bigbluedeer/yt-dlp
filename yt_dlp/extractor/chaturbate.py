@@ -77,10 +77,12 @@ class ChaturbateIE(InfoExtractor):
                 self.report_warning('%s: %s' % (k, str(v)), video_id)
 
             if requires_captcha:
-                # cannot deal with a captcha, probably best to log in manually
-                # and use cookies
+                # cannot deal with a captcha, probably best to perform roomlogin
+                # manually and use cookies, which save if the roomlogin was
+                # performed already
                 self.raise_login_required(
-                    'A captcha seems to be required, please log in manually',
+                    'A captcha seems to be required, please perform the '
+                    'roomlogin in manually',
                     method='cookies')
 
         self.raise_login_required('Roomlogin failed')

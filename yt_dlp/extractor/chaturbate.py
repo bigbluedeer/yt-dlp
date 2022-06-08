@@ -6,6 +6,7 @@ from ..utils import (
     ExtractorError,
     get_element_by_attribute,
     get_element_html_by_class,
+    get_element_html_by_id,
     lowercase_escape,
     multipart_encode,
     url_or_none,
@@ -111,12 +112,13 @@ class ChaturbateIE(InfoExtractor):
             return obj is not None
 
         # user information container is not anonymous
-        container = self._search_regex(
-            r'<div id="user_information_profile_container" class="(?P<class>.*)">',
-            webpage, 'user information container', fatal=False, group='class')
+        container = get_element_html_by_id('user_information_profile_container', webpage)
         if container is not None:
             # anonymous in container means logged out
-            return 'anonymous' not in container
+            container_class = self._search_regex(
+                r'<div[^>]+class=([\'"])(?P<class>.*)\1>', container,
+                'user information container class', fatal=False, group='class')
+            return 'anonymous' not in container_class
 
         # is logged in function returns true, not found on room pages
         tf = self._search_regex(

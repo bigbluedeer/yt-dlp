@@ -120,13 +120,13 @@ class ChaturbateIE(InfoExtractor):
                 'user information container class', fatal=False, group='class')
             return 'anonymous' not in container_class
 
-        # is logged in function returns true, not found on room pages
+        # is logged in function returns true (not found on room pages)
         tf = self._search_regex(
             r'function is_logged_in\(\)\s*{\s*return (?P<tf>true|false);\s*}',
             webpage, 'logged in function', fatal=False, group='tf')
         if tf is not None:
-            # fatal because true|false should be valid json
-            return self._parse_json(tf, 'logged in function')
+            # in case of parsing error return False
+            return bool(self._parse_json(tf, 'logged in function', fatal=False))
 
         return False
 

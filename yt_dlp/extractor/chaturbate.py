@@ -83,51 +83,41 @@ class ChaturbateIE(InfoExtractor):
 
         self.raise_login_required('Roomlogin failed')
 
-    def _extract_is_logged_in(self, webpage):
-        # not found on room page
-        tf = self._search_regex(r'function is_logged_in\(\)\s*{\s*'
-                                r'return (?P<loggedin>true|false);\s*}',
-                                webpage, 'logged in function', fatal=False,
-                                group='loggedin')
-        if tf is None:
-            return False
-        # fatal because true|false should be valid json
-        return self._parse_json(tf, 'logged in function')
-
-    def _extract_logged_in_user(self, webpage):
-        user = self._search_regex(r'logged_in_user:\s*JSON\.parse\(([\'"])(?P<user>.*)\1\),',
-                                  webpage, 'logged in user', fatal=False, group='user')
-        if user is None:
-            return None  # assume not logged in
-        return self._parse_json(user, 'logged in user',
-                                transform_source=lowercase_escape, fatal=False)
-
-    def _extract_user_information_container_anonymous(self, webpage):
-        container = self._search_regex(
-            r'<div id="user_information_profile_container" class="(?P<class>.*)">',
-            webpage, 'user information container', fatal=False, group='class')
-        if container is None:
-            return True  # assume not logged in
-        return 'anonymous' in container
-
-    @staticmethod
-    def _extract_user_information_header_username(webpage):
-        header = get_element_html_by_class(
-            class_name='user_information_header_username', html=webpage)
-        if header is None:
-            return False
-        return True
-
     def _is_logged_in(self, webpage=None):
         if webpage is None:
             webpage = self._download_webpage('https://chaturbate.com', None)
 
-        # multiple fallbacks for the future
-        if (self._extract_is_logged_in(webpage)
-                or self._extract_logged_in_user(webpage) is not None
-                or not self._extract_user_information_container_anonymous(webpage)
-                or self._extract_user_information_header_username(webpage)):
+        # user information header for username is present
+        header = get_element_html_by_class(
+            class_name='user_information_header_username', html=webpage)
+        if header is not None:
             return True
+
+        # logged-in user object is not None
+        user = self._search_regex(r'logged_in_user:\s*JSON\.parse\(([\'"])(?P<user>.*)\1\),',
+                                  webpage, 'logged in user', fatal=False, group='user')
+        if user is not None:
+            obj = self._parse_json(user, 'logged in user',
+                                   transform_source=lowercase_escape, fatal=False)
+            # obj is None means logged out
+            return obj is not None
+
+        # user information container is not anonymous
+        container = self._search_regex(
+            r'<div id="user_information_profile_container" class="(?P<class>.*)">',
+            webpage, 'user information container', fatal=False, group='class')
+        if container is not None:
+            # anonymous in container means logged out
+            return 'anonymous' not in container
+
+        # is logged in function, not found on room pages
+        tf = self._search_regex(
+            r'function is_logged_in\(\)\s*{\s*return (?P<tf>true|false);\s*}',
+            webpage, 'logged in function', fatal=False, group='tf')
+        if tf is not None:
+            # fatal because true|false should be valid json
+            return self._parse_json(tf, 'logged in function')
+
         return False
 
     def _real_extract(self, url):

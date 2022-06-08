@@ -1,9 +1,12 @@
+import random
 import re
 
 from .common import InfoExtractor
 from ..utils import (
     ExtractorError,
+    get_element_html_by_class,
     lowercase_escape,
+    multipart_encode,
     url_or_none,
 )
 
@@ -33,12 +36,126 @@ class ChaturbateIE(InfoExtractor):
 
     _ROOM_OFFLINE = 'Room is currently offline'
 
+    def _perform_roomlogin(self, video_id, referer):
+        password = self.get_param('videopassword')
+        if password is None:
+            raise ExtractorError('Roomlogin requires a video password')
+
+        # there is always 27 dashes in the boundary
+        # boundary numbers tend to have between 29 and 30 digits
+        # could technically be completely random, but was adjusted to firefox defaults
+        boundary = '-' * 27 + ''.join(str(random.randint(0, 9)) for _ in range(random.randint(29, 30)))
+        csrf = self._get_cookies('https://chaturbate.com')['csrftoken'].value
+        data, content_type = multipart_encode(
+            {'password': password, 'csrfmiddlewaretoken': csrf}, boundary=boundary)
+
+        webpage = self._download_webpage(
+            'https://chaturbate.com/api/ts/chat/roomloginform/%s/' % video_id,
+            video_id, note='Performing roomlogin', data=data,
+            headers={'Content-Type': content_type, 'Referer': referer})
+        webpage = self._parse_json(webpage, video_id)
+
+        if webpage is None:
+            # valid login
+            return True
+
+        if 'errors' in webpage:
+            self.report_warning('Errors for roomlogin:', video_id)
+            for k, v in webpage.get('errors', {}).items():
+                self.report_warning('%s: %s' % (k, ', '.join(v)), video_id)
+
+        # sometimes might require a captcha
+        if 'extra' in webpage:
+            self.report_warning('Extra for roomlogin:', video_id)
+            extra = webpage.get('extra', {})
+            requires_captcha = extra.pop('requires_captcha', None)
+
+            # output remaining before checking for captcha
+            for k, v in extra.items():
+                self.report_warning('%s: %s' % (k, str(v)), video_id)
+
+            if requires_captcha:
+                # cannot deal with a captcha, probably best to log in manually
+                # and use cookies
+                self.raise_login_required(
+                    'A captcha seems to be required, please log in manually',
+                    method='cookies')
+
+        self.raise_login_required('Roomlogin failed')
+
+    def _extract_is_logged_in(self, webpage):
+        # not found on room page
+        tf = self._search_regex(r'function is_logged_in\(\)\s*{\s*'
+                                r'return (?P<loggedin>true|false);\s*}',
+                                webpage, 'logged in function', fatal=False,
+                                group='loggedin')
+        if tf is None:
+            return False
+        # fatal because true|false should be valid json
+        return self._parse_json(tf, 'logged in function')
+
+    def _extract_logged_in_user(self, webpage):
+        user = self._search_regex(r'logged_in_user:\s*JSON\.parse\(([\'"])(?P<user>.*)\1\),',
+                                  webpage, 'logged in user', fatal=False, group='user')
+        if user is None:
+            return None  # assume not logged in
+        return self._parse_json(user, 'logged in user',
+                                transform_source=lowercase_escape, fatal=False)
+
+    def _extract_user_information_container_anonymous(self, webpage):
+        container = self._search_regex(
+            r'<div id="user_information_profile_container" class="(?P<class>.*)">',
+            webpage, 'user information container', fatal=False, group='class')
+        if container is None:
+            return True  # assume not logged in
+        return 'anonymous' in container
+
+    @staticmethod
+    def _extract_user_information_header_username(webpage):
+        header = get_element_html_by_class(
+            class_name='user_information_header_username', html=webpage)
+        if header is None:
+            return False
+        return True
+
+    def _is_logged_in(self, webpage=None):
+        if webpage is None:
+            webpage = self._download_webpage('https://chaturbate.com', None)
+
+        # multiple fallbacks for the future
+        if (self._extract_is_logged_in(webpage)
+                or self._extract_logged_in_user(webpage) is not None
+                or not self._extract_user_information_container_anonymous(webpage)
+                or self._extract_user_information_header_username(webpage)):
+            return True
+        return False
+
     def _real_extract(self, url):
         video_id = self._match_id(url)
 
-        webpage = self._download_webpage(
+        webpage, urlh = self._download_webpage_handle(
             'https://chaturbate.com/%s/' % video_id, video_id,
             headers=self.geo_verification_headers())
+
+        # redirect to login page
+        if re.match(r'https://chaturbate\.com/auth/login.*', urlh.geturl()):
+            self.raise_login_required('Login is required for this room',
+                                      video_id)
+
+        # redirect to roomlogin page
+        if re.match(r'https://chaturbate\.com/roomlogin/%s/?' % video_id,
+                    urlh.geturl()):
+            # roomlogin only works when logged in
+            if not self._is_logged_in(webpage):
+                self.raise_login_required('Login is required for this roomlogin',
+                                          video_id)
+
+            # this is only required once for the same cookies
+            self._perform_roomlogin(video_id, urlh.geturl())
+
+            webpage = self._download_webpage(
+                'https://chaturbate.com/%s/' % video_id, video_id,
+                headers=self.geo_verification_headers())
 
         found_m3u8_urls = []
 

@@ -40,7 +40,8 @@ class ChaturbateIE(InfoExtractor):
     def _perform_roomlogin(self, video_id, referer):
         password = self.get_param('videopassword')
         if password is None:
-            raise ExtractorError('Roomlogin requires a video password')
+            raise ExtractorError('Roomlogin requires a video password, please use the --video-password option',
+                                 expected=True)
 
         # there is always 27 dashes in the boundary
         # boundary numbers tend to have between 29 and 30 digits
@@ -115,7 +116,7 @@ class ChaturbateIE(InfoExtractor):
             # anonymous in container means logged out
             return 'anonymous' not in container
 
-        # is logged in function, not found on room pages
+        # is logged in function returns true, not found on room pages
         tf = self._search_regex(
             r'function is_logged_in\(\)\s*{\s*return (?P<tf>true|false);\s*}',
             webpage, 'logged in function', fatal=False, group='tf')
@@ -138,7 +139,7 @@ class ChaturbateIE(InfoExtractor):
                                       video_id)
 
         # redirect to roomlogin page
-        if re.match(r'https://chaturbate\.com/roomlogin/%s/?' % video_id,
+        if re.match(r'https://chaturbate\.com/roomlogin/%s.*' % video_id,
                     urlh.geturl()):
             # roomlogin only works when logged in
             if not self._is_logged_in(webpage):

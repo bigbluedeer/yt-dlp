@@ -4,6 +4,7 @@ import re
 from .common import InfoExtractor
 from ..utils import (
     ExtractorError,
+    get_element_by_attribute,
     get_element_html_by_class,
     lowercase_escape,
     multipart_encode,
@@ -88,10 +89,14 @@ class ChaturbateIE(InfoExtractor):
             webpage = self._download_webpage('https://chaturbate.com', None)
 
         # user information header for username is present
-        header = get_element_html_by_class(
-            class_name='user_information_header_username', html=webpage)
+        header = get_element_html_by_class('user_information_header_username', webpage)
         if header is not None:
             return True
+
+        # user status is not anonymous
+        status = get_element_by_attribute('title', 'Status', webpage)
+        if status is not None:
+            return 'Anonymous' not in status
 
         # logged-in user object is not None
         user = self._search_regex(r'logged_in_user:\s*JSON\.parse\(([\'"])(?P<user>.*)\1\),',

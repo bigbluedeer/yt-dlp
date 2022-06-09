@@ -40,9 +40,12 @@ class ChaturbateIE(InfoExtractor):
 
     def _perform_roomlogin(self, video_id, referer):
         password = self.get_param('videopassword')
+        manual_rl_hint = ('perform the roomlogin manually on the web page and export '
+                          'your cookies, they should unlock the roomlogin')
         if password is None:
-            raise ExtractorError('Roomlogin requires a video password, please use the --video-password option',
-                                 expected=True)
+            self.raise_login_required(
+                'Roomlogin requires a video password, please use the '
+                '--video-password option or ' + manual_rl_hint)
 
         # there is always 27 dashes in the boundary
         # boundary numbers tend to have between 29 and 30 digits
@@ -64,30 +67,29 @@ class ChaturbateIE(InfoExtractor):
             return True
 
         if 'errors' in webpage:
-            self.report_warning('Errors for roomlogin:', video_id)
             for k, v in webpage.get('errors', {}).items():
-                self.report_warning('%s: %s' % (k, ', '.join(v)), video_id)
+                self.report_warning('Roomlogin error: %s: %s' % (k, ', '.join(v)), video_id)
 
         # sometimes might require a captcha
         if 'extra' in webpage:
-            self.report_warning('Extra for roomlogin:', video_id)
             extra = webpage.get('extra', {})
             requires_captcha = extra.pop('requires_captcha', None)
 
             # output remaining before checking for captcha
             for k, v in extra.items():
-                self.report_warning('%s: %s' % (k, str(v)), video_id)
+                self.report_warning('Roomlogin extra: %s: %s' % (k, str(v)), video_id)
 
             if requires_captcha:
                 # cannot deal with a captcha, probably best to perform roomlogin
                 # manually and use cookies, which save if the roomlogin was
                 # performed already
                 self.raise_login_required(
-                    'A captcha seems to be required, please perform the '
-                    'roomlogin in manually',
+                    'A captcha seems to be required, please ' + manual_rl_hint,
                     method='cookies')
 
-        self.raise_login_required('Roomlogin failed')
+        self.raise_login_required(
+            'Roomlogin failed. If you specified the correct video password, '
+            'please try to ' + manual_rl_hint)
 
     def _is_logged_in(self, webpage=None):
         if webpage is None:

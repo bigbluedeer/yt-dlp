@@ -52,9 +52,10 @@ class ChaturbateIE(InfoExtractor):
         data, content_type = multipart_encode(
             {'password': password, 'csrfmiddlewaretoken': csrf}, boundary=boundary)
 
+        # 400: Bad Request is often incorrect password
         webpage = self._download_webpage(
             'https://chaturbate.com/api/ts/chat/roomloginform/%s/' % video_id,
-            video_id, note='Performing roomlogin', data=data,
+            video_id, note='Performing roomlogin', data=data, expected_status=400,
             headers={'Content-Type': content_type, 'Referer': referer})
         webpage = self._parse_json(webpage, video_id)
 

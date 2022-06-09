@@ -153,7 +153,16 @@ class ChaturbateIE(InfoExtractor):
                 self.raise_login_required('Login is required for this roomlogin',
                                           video_id)
 
-            # this is only required once for the same cookies
+            # this is only required once for the same cookies until the password is changed
+            # following is python code describing what is assumed to be the logic behind this:
+            # cookie_password = get_cookie_password()
+            # if cookie_password == video_id_password:
+            #     return "login"
+            # sent_password = request_roomlogin()
+            # if sent_password == video_id_password:
+            #     set_cookie_password(sent_password)
+            #     return "login"
+            # return "loginerror"
             self._perform_roomlogin(video_id, urlh.geturl())
 
             webpage = self._download_webpage(

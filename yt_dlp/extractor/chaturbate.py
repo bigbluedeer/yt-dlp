@@ -125,7 +125,7 @@ class ChaturbateIE(InfoExtractor):
 
         # is logged in function returns true (not found on room pages)
         tf = self._search_regex(
-            r'function is_logged_in\(\)\s*{\s*return (?P<tf>true|false);\s*}',
+            r'function\s+is_logged_in\s*\(\)\s*{\s*return\s+(?P<tf>true|false);\s*}',
             webpage, 'logged in function', fatal=False, group='tf')
         if tf is not None:
             # in case of parsing error return False
